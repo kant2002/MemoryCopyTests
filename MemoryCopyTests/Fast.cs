@@ -1,21 +1,17 @@
 ﻿using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Running;
 using System;
 using System.Collections.Generic;
 using System.Text;
 
 namespace MemoryCopyTests
 {
-    //[ClrJob, CoreJob]
     [DisassemblyDiagnoser]
-    public class FindSections
+    public class Fast
     {
         [ParamsSource(nameof(ValuesForA))]
         public string A { get; set; }
-
-        // public property
         public static IEnumerable<string> ValuesForA => new[]
-        {
+{
             "small non html string",
             "",
             @"<footer style='display: none;'>
@@ -342,42 +338,19 @@ namespace MemoryCopyTests
         };
 
         [Benchmark]
-        public string CharArray() => HtmlToPlain.CharArray(this.A);
+        public string CharArrayPointerBuffer() => HtmlToPlain.CharArrayPointerBuffer(this.A);
 
         [Benchmark]
-        public string CharArrayPointer() => HtmlToPlain.CharArrayPointer(this.A);
+        public string CharArrayPointerBufferWithStackAllock() => HtmlToPlain.CharArrayPointerBufferWithStackAllock(this.A);
 
+#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NET472
         [Benchmark]
-        public string CharArrayPointerBufferWithStackAllockIndexOfIterable() => HtmlToPlain.CharArrayPointerBufferWithStackAllockIndexOfIterable(this.A);
-
+        public string Span() => HtmlToPlain.Span(this.A);
         [Benchmark]
-        public string CharArrayStringIndexOf() => HtmlToPlain.CharArrayStringIndexOf(this.A);
-
+        public string Span2() => HtmlToPlain.Span2(this.A);
         [Benchmark]
-        public string StringBuilder() => HtmlToPlain.StringBuilder(this.A);
-
-        [Benchmark]
-        public string StringBuilderRemoveStringIndexOf() => HtmlToPlain.StringBuilderRemoveStringIndexOf(this.A);
-
-        [Benchmark]
-        public string StringBuilderStringIndexOf() => HtmlToPlain.StringBuilderStringIndexOf(this.A);
-
-        [Benchmark]
-        public string StringJoinStringIndexOf() => HtmlToPlain.StringJoinStringIndexOf(this.A);
-    }
-
-    class Program
-    {
-#if DEBUG && (NETCOREAPP2_1 || NETCOREAPP2_2 || NET472)
-        static Program()
-        {
-            var x = HtmlToPlain.Span2("asdadas<d>dddd</d>");
-            var y = x;
-        }
+        public string Span3() => HtmlToPlain.Span3(this.A);
 #endif
-        public static void Main(string[] args)
-            => BenchmarkSwitcher
-                .FromAssembly(typeof(Program).Assembly)
-                .Run(args);
+
     }
 }

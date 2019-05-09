@@ -109,6 +109,21 @@ namespace MemoryCopyTests
             return -1;
         }
 
+        unsafe static int IndexOfIterable(char* p, char c, int start, int maxLen)
+        {
+            var i = p + start;
+            var end = p + maxLen; 
+            while (i < end)
+            {
+                if (*i == c)
+                    return (int)(i - p);
+
+                i++;
+            }
+
+            return -1;
+        }
+
         public unsafe static string CharArrayPointerBuffer(string source)
         {
             var arrayIndex = 0;
@@ -169,6 +184,165 @@ namespace MemoryCopyTests
 
             return new string(d, 0, arrayIndex);
         }
+
+        public unsafe static string CharArrayPointerBufferWithStackAllockIndexOfIterable(string source)
+        {
+            var arrayIndex = 0;
+            var maxLen = source.Length;
+            var d = stackalloc char[maxLen];
+            var i = 0;
+
+            fixed (char* p = source)
+            {
+                do
+                {
+                    var index = IndexOfIterable(p, '<', i, maxLen);
+                    if (index < 0)
+                    {
+                        Buffer.MemoryCopy(p + i, d + arrayIndex, sizeof(char) * (maxLen - arrayIndex), sizeof(char) * (maxLen - i));
+                        arrayIndex += maxLen - i;
+                        break;
+                    }
+                    Buffer.MemoryCopy(p + i, d + arrayIndex, sizeof(char) * (maxLen - arrayIndex), sizeof(char) * (index - i));
+                    arrayIndex += index - i;
+
+                    i = IndexOfIterable(p, '>', index, maxLen) + 1;
+                }
+                while (i < source.Length && i > 0);
+            }
+
+            return new string(d, 0, arrayIndex);
+        }
+
+#if NETCOREAPP2_1 || NETCOREAPP2_2 || NETCOREAPP3_0 || NET472
+        public unsafe static string Span(string source)
+        {
+            var maxLen = source.Length;
+            if (maxLen == 0)
+            {
+                return string.Empty;
+            }
+
+            var arrayIndex = 0;
+            Span<char> d = stackalloc char[maxLen];
+            var i = 0;
+
+            var p = source.AsSpan();
+            {
+                do
+                {
+                    var startSlice = p.Slice(i);
+                    var index = startSlice.IndexOf('<');
+                    // var index = IndexOfIterable(p, '<', i, maxLen);
+                    if (index < 0)
+                    {
+                        if (i == 0)
+                        {
+                            return source;
+                        }
+
+                        startSlice.CopyTo(d.Slice(arrayIndex));
+                        arrayIndex += maxLen - i;
+                        break;
+                    }
+
+                    startSlice.Slice(0, index).CopyTo(d.Slice(arrayIndex));
+                    arrayIndex += index ;
+                    i += index + p.Slice(i + index).IndexOf('>') + 1;
+                    //i = IndexOfIterable(p, '>', index, maxLen) + 1;
+                }
+                while (i < source.Length && i > 0);
+            }
+
+            return new string(d.Slice(0, arrayIndex));
+        }
+
+        public unsafe static string Span2(string source)
+        {
+            var maxLen = source.Length;
+            if (maxLen == 0)
+            {
+                return string.Empty;
+            }
+
+            var arrayIndex = 0;
+            Span<char> d = stackalloc char[maxLen];
+
+            var currentItem = source.AsSpan();
+            //var left = source.Length;
+            var target = d;
+            {
+                do
+                {
+                    var startSlice = currentItem;
+                    var index = startSlice.IndexOf('<');
+                    if (index < 0)
+                    {
+                        if (arrayIndex == 0)
+                        {
+                            return source;
+                        }
+
+                        startSlice.CopyTo(target);
+                        arrayIndex += currentItem.Length;
+                        break;
+                    }
+
+                    startSlice.Slice(0, index).CopyTo(target);
+                    target = target.Slice(index);
+
+                    var skipTillTagClose = index + currentItem.Slice(index).IndexOf('>') + 1;
+                    currentItem = currentItem.Slice(skipTillTagClose);
+                    arrayIndex += index;
+                    //left -= skipTillTagClose;
+                }
+                while (currentItem.Length > 0);
+            }
+
+            return new string(d.Slice(0, arrayIndex));
+        }
+
+        public unsafe static string Span3(ReadOnlySpan<char> source)
+        {
+            if (source.IsEmpty)
+            {
+                return string.Empty;
+            }
+
+            var arrayIndex = 0;
+            Span<char> buffer = stackalloc char[source.Length];
+
+            var currentItem = source;
+            var target = buffer;
+            {
+                do
+                {
+                    var index = currentItem.IndexOf('<');
+                    if (index < 0)
+                    {
+                        if (arrayIndex == 0)
+                        {
+                            return new string(source);
+                        }
+
+                        currentItem.CopyTo(target);
+                        arrayIndex += currentItem.Length;
+                        break;
+                    }
+
+                    currentItem.Slice(0, index).CopyTo(target);
+                    target = target.Slice(index);
+
+                    var skipTillTagClose = index + currentItem.Slice(index).IndexOf('>') + 1;
+                    currentItem = currentItem.Slice(skipTillTagClose);
+                    arrayIndex += index;
+                }
+                while (currentItem.Length > 0);
+            }
+
+            return new string(buffer.Slice(0, arrayIndex));
+        }
+#endif
 
         public static string CharArrayStringIndexOf(string source)
         {
